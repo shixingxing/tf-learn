@@ -1,6 +1,7 @@
 import requests
 import re
 import pandas as pd
+import _thread
 
 
 # 用get方法访问服务器并提取页面数据
@@ -24,7 +25,30 @@ def getOnePageStock(cmd, page):
     return stocks
 
 
+def loadByCmd(cmd, i):
+    page = 1
+    stocks = getOnePageStock(cmd[i], page)
+    print("Thread:" + str(_thread.get_ident()) + i + "已加载第" + str(page) + "页")
+    # 自动爬取多页，并在结束时停止
+    while True:
+        page += 1
+        if getHtml(cmd[i], page) != getHtml(cmd[i], page - 1):
+            stocks.extend(getOnePageStock(cmd[i], page))
+            print("Thread:" + str(_thread.get_ident()) + i + "已加载第" + str(page) + "页")
+        else:
+            break
+    df = pd.DataFrame(stocks)
+    # 提取主要数据/提取全部数据
+    # df.drop([0,14,15,16,17,18,19,20,21,22,23,25],axis=1,inplace=True)
+    columns = {1: "代码", 2: "名称", 3: "最新价格", 4: "涨跌额", 5: "涨跌幅", 6: "成交量", 7: "成交额", 8: "振幅", 9: "最高", 10: "最低",
+               11: "今开", 12: "昨收", 13: "量比", 24: "时间"}
+    df.rename(columns=columns, inplace=True)
+    df.to_excel("股票--" + i + ".xls")
+    print("已保存" + i + ".xls")
+
+
 def main():
+    print("Main Thread:" + str(_thread.get_ident()))
     cmd = {
         "上证指数": "C.1",
         "深圳指数": "C.5",
@@ -36,25 +60,12 @@ def main():
         "创业板": "C.80"
     }
     for i in cmd.keys():
-        page = 1
-        stocks = getOnePageStock(cmd[i], page)
-        # 自动爬取多页，并在结束时停止
-        while True:
-            page += 1
-            if getHtml(cmd[i], page) != getHtml(cmd[i], page - 1):
-                stocks.extend(getOnePageStock(cmd[i], page))
-                print(i + "已加载第" + str(page) + "页")
-            else:
-                break
-
-        df = pd.DataFrame(stocks)
-        # 提取主要数据/提取全部数据
-        # df.drop([0,14,15,16,17,18,19,20,21,22,23,25],axis=1,inplace=True)
-        columns = {1: "代码", 2: "名称", 3: "最新价格", 4: "涨跌额", 5: "涨跌幅", 6: "成交量", 7: "成交额", 8: "振幅", 9: "最高", 10: "最低",
-                   11: "今开", 12: "昨收", 13: "量比", 24: "时间"}
-        df.rename(columns=columns, inplace=True)
-        df.to_excel("股票--" + i + ".xls")
-        print("已保存" + i + ".xls")
+        try:
+            _thread.start_new_thread(loadByCmd, (cmd, i))
+        except:
+            print("error")
 
 
 main()
+while 1:
+    pass
